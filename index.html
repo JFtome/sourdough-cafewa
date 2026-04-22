@@ -226,62 +226,129 @@
         </div>
     </div>
 
-    <script>
-        // DATA: You would update these dates at the start of every month
-        // Format: { day: number, available: number }
-        const pickupDates = [
-            { day: 5, available: 4 },
-            { day: 12, available: 2 },
-            { day: 19, available: 0 },
-            { day: 26, available: 4 }
-        ];
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-        function showOrderPage() {
-            document.getElementById('order-page').style.display = 'block';
+<script>
+    // 1. YOUR FIREBASE CONFIGURATION
+    // Replace these placeholders with the keys you copied from Firebase Console
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    const firebaseConfig = {
+      apiKey: "AIzaSyC2z77Kkp-BkVXxBP5cNE5VQ-JIXCpYGM8",
+      authDomain: "sourdough-cafe-wa.firebaseapp.com",
+      databaseURL: "https://sourdough-cafe-wa-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "sourdough-cafe-wa",
+      storageBucket: "sourdough-cafe-wa.firebasestorage.app",
+      messagingSenderId: "606244047225",
+      appId: "1:606244047225:web:86b0fb7605522732c047a8",
+      measurementId: "G-KZSPDDE8J3"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let localPickupDates = [];
+    let currentlySelectedDay = null;
+
+    // 2. LISTEN FOR LIVE UPDATES
+    // This runs every time someone, anywhere, changes the data
+    db.ref('pickupDates').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            localPickupDates = data;
             renderCalendar();
+        } else {
+            // INITIAL SETUP: If database is empty, create the first set of dates
+            const initialDates = [
+                { day: 5, available: 4 },
+                { day: 12, available: 4 },
+                { day: 19, available: 4 },
+                { day: 26, available: 4 }
+            ];
+            db.ref('pickupDates').set(initialDates);
         }
+    });
 
-        function hideOrderPage() {
-            document.getElementById('order-page').style.display = 'none';
-        }
-
-        function renderCalendar() {
-            const cal = document.getElementById('calendar');
-            cal.innerHTML = '';
+    function renderCalendar() {
+        const cal = document.getElementById('calendar');
+        cal.innerHTML = '';
+        
+        for (let i = 1; i <= 30; i++) {
+            const dateData = localPickupDates.find(d => d.day === i);
+            const btn = document.createElement('div');
+            btn.className = 'day-btn';
             
-            // Create a simple 30-day mock calendar
-            for (let i = 1; i <= 30; i++) {
-                const dateData = pickupDates.find(d => d.day === i);
-                const btn = document.createElement('div');
-                btn.className = 'day-btn';
-                
-                if (dateData) {
-                    if (dateData.available > 0) {
-                        btn.classList.add('available');
-                        btn.innerHTML = `<strong>${i}</strong><br><small>${dateData.available} left</small>`;
-                        btn.onclick = () => showOrderForm(i, dateData.available);
-                    } else {
-                        btn.classList.add('disabled');
-                        btn.innerHTML = `<strong>${i}</strong><br><small>Full</small>`;
-                    }
+            if (dateData) {
+                if (dateData.available > 0) {
+                    btn.classList.add('available');
+                    btn.innerHTML = `<strong>${i}</strong><br><small>${dateData.available} left</small>`;
+                    btn.onclick = () => selectDate(i);
                 } else {
                     btn.classList.add('disabled');
-                    btn.innerHTML = `<strong>${i}</strong>`;
+                    btn.innerHTML = `<strong>${i}</strong><br><small>Full</small>`;
                 }
-                cal.appendChild(btn);
+            } else {
+                btn.classList.add('disabled');
+                btn.innerHTML = `<strong>${i}</strong>`;
             }
+            cal.appendChild(btn);
         }
+    }
 
-        function showOrderForm(day, left) {
-            document.getElementById('order-form-container').style.display = 'block';
-            document.getElementById('selected-date-display').innerText = `April ${day}`;
-            document.getElementById('form-date').value = `April ${day}`;
-            window.scrollTo(0, document.body.scrollHeight);
-        }
+    // 3. ATOMIC DECREMENT (Prevents two people from taking the last loaf at once)
+    function selectDate(day) {
+        const dateIndex = localPickupDates.findIndex(d => d.day === day);
+        const dateRef = db.ref(`pickupDates/${dateIndex}/available`);
 
-        function hideOrderForm() {
-            document.getElementById('order-form-container').style.display = 'none';
+        dateRef.transaction((currentAvailable) => {
+            if (currentAvailable > 0) {
+                currentlySelectedDay = day;
+                return currentAvailable - 1;
+            }
+            return; // Abort if someone else took it while we were clicking
+        }, (error, committed) => {
+            if (committed) {
+                showOrderForm(day);
+            } else {
+                alert("Sorry, someone just reserved the last loaf for this day!");
+            }
+        });
+    }
+
+    // 4. INCREMENT ON CANCEL
+    function cancelSelection() {
+        if (currentlySelectedDay !== null) {
+            const dateIndex = localPickupDates.findIndex(d => d.day === currentlySelectedDay);
+            const dateRef = db.ref(`pickupDates/${dateIndex}/available`);
+
+            dateRef.transaction((currentAvailable) => {
+                return (currentAvailable || 0) + 1;
+            });
+            
+            currentlySelectedDay = null;
+            hideOrderForm();
         }
-    </script>
+    }
+
+    function showOrderPage() {
+        document.getElementById('order-page').style.display = 'block';
+    }
+
+    function hideOrderPage() {
+        document.getElementById('order-page').style.display = 'none';
+        if (currentlySelectedDay !== null) cancelSelection();
+    }
+
+    function showOrderForm(day) {
+        document.getElementById('order-form-container').style.display = 'block';
+        document.getElementById('selected-date-display').innerText = `Date: ${day}`;
+        document.getElementById('form-date').value = `Pickup Day ${day}`;
+    }
+
+    function hideOrderForm() {
+        document.getElementById('order-form-container').style.display = 'none';
+    }
+</script>
 </body>
 </html>
