@@ -316,18 +316,28 @@
         });
     }
 
-    // 4. INCREMENT ON CANCEL
+    // Triggered if the guest clicks "Cancel" on the form
     function cancelSelection() {
         if (currentlySelectedDay !== null) {
+            // 1. Find the index in our local array for the day we want to return
             const dateIndex = localPickupDates.findIndex(d => d.day === currentlySelectedDay);
-            const dateRef = db.ref(`pickupDates/${dateIndex}/available`);
-
-            dateRef.transaction((currentAvailable) => {
-                return (currentAvailable || 0) + 1;
-            });
             
-            currentlySelectedDay = null;
-            hideOrderForm();
+            if (dateIndex !== -1) {
+                // 2. Reference the exact spot in Firebase
+                const dateRef = db.ref(`pickupDates/${dateIndex}/available`);
+    
+                // 3. Increment the value back up by 1 in the cloud
+                dateRef.transaction((currentAvailable) => {
+                    return (currentAvailable || 0) + 1;
+                }, (error, committed) => {
+                    if (committed) {
+                        // 4. Reset local tracking and hide the form
+                        currentlySelectedDay = null;
+                        hideOrderForm();
+                        renderCalendar(); // Force a fresh look
+                    }
+                });
+            }
         }
     }
 
@@ -340,12 +350,21 @@
         if (currentlySelectedDay !== null) cancelSelection();
     }
 
+    // Updated showOrderForm to ensure the window scrolls to the form so they see the buttons
     function showOrderForm(day) {
-        document.getElementById('order-form-container').style.display = 'block';
-        document.getElementById('selected-date-display').innerText = `Date: ${day}`;
-        document.getElementById('form-date').value = `Pickup Day ${day}`;
+        const container = document.getElementById('order-form-container');
+        container.style.display = 'block';
+        document.getElementById('selected-date-display').innerText = `Day ${day}`;
+        document.getElementById('form-date').value = `Pickup: Day ${day}`;
+        
+        // Smooth scroll to form
+        container.scrollIntoView({ behavior: 'smooth' });
     }
-
+    // IMPORTANT: Clear the selection if they actually SUBMIT the form
+    document.querySelector('#order-form-container form').onsubmit = function() {
+        // We don't want the cancel logic to trigger when they leave the page after a successful order
+        currentlySelectedDay = null; 
+    };
     function hideOrderForm() {
         document.getElementById('order-form-container').style.display = 'none';
     }
