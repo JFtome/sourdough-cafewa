@@ -261,10 +261,7 @@
         } else {
             // INITIAL SETUP: If database is empty, create the first set of dates
             const initialDates = [
-                { day: 5, available: 4 },
-                { day: 12, available: 4 },
-                { day: 19, available: 4 },
-                { day: 26, available: 4 }
+                { day: 5, available: 0 }
             ];
             db.ref('pickupDates').set(initialDates);
         }
@@ -328,7 +325,7 @@
     
                 // 3. Increment the value back up by 1 in the cloud
                 dateRef.transaction((currentAvailable) => {
-                    return (currentAvailable || 0) + 1;
+                    return currentAvailable + 1;
                 }, (error, committed) => {
                     if (committed) {
                         // 4. Reset local tracking and hide the form
