@@ -349,7 +349,7 @@
         document.getElementById('order-page').style.display = 'none';
         if (currentlySelectedDay !== null) cancelSelection();
     }
-
+    
     // Updated showOrderForm to ensure the window scrolls to the form so they see the buttons
     function showOrderForm(day) {
         const container = document.getElementById('order-form-container');
@@ -360,14 +360,12 @@
         // Smooth scroll to form
         container.scrollIntoView({ behavior: 'smooth' });
     }
+    
     // IMPORTANT: Clear the selection if they actually SUBMIT the form
     document.querySelector('#order-form-container form').onsubmit = function() {
         // We don't want the cancel logic to trigger when they leave the page after a successful order
         currentlySelectedDay = null; 
     };
-    function hideOrderForm() {
-        document.getElementById('order-form-container').style.display = 'none';
-    }
 </script>
 </body>
 </html>
